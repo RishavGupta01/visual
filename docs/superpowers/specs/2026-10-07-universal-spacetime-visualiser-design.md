@@ -84,10 +84,26 @@ The orbit equation for Schwarzschild null geodesics is
 d²u/dφ² = -u + 3M u² ,        u = 1/r
 ```
 
-with `dt/dφ = k` constant along the geodesic, and `dr/dφ = ±√(k² - 1 + 2Mu)`.
-`k` is fixed from the ray's initial condition at the near plane and is conserved.
+with the conserved quantity
 
-This is the *exact* Schwarzschild null geodesic, not a weak-field approximation.
+```
+w² + u² - 2Mu³ = k² u⁴ ,      w = du/dφ
+```
+
+and `dt/dφ = k`, where `k = r²/L` is constant along the geodesic (`E = 1` normalisation).
+Equivalently `(dr/dφ)² = k² - r²(1 - 2M/r)`.
+
+Initial conditions at the near plane, from the ray's start position `p₀` and unit
+direction `d₀`, with `r₀ = |p₀|` and `ψ` the angle between `d₀` and the outward radial
+direction:
+
+```
+u₀ = 1/r₀          k = r₀ / sin ψ          w₀ = -cos ψ / (r₀ sin ψ)
+```
+
+These are exact: substituting them reproduces the invariant above identically, which is
+asserted in the test suite. `sin ψ` is clamped to `1e-6` for exactly radial rays, where the
+integrator correctly yields capture for `cos ψ < 0` and escape for `cos ψ > 0`.
 Consequences that must emerge on their own, with no special-casing:
 
 - The shadow radius is `b_crit = 3√3 M ≈ 5.196 M`. We assert this in a test.
