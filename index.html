@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spacetime — a universal visualiser</title>
+    <meta
+      name="description"
+      content="Time dilation, gravity, light speed and wormholes rendered from exact general-relativistic metrics."
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="stage" aria-label="Spacetime visualisation"></canvas>
+    <div id="hud"></div>
+    <div id="controls"></div>
+    <div id="math"></div>
+    <noscript>
+      <p class="fallback">This visualiser requires JavaScript and WebGL2.</p>
+    </noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
