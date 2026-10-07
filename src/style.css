@@ -1,0 +1,77 @@
+:root {
+  --dur-instant: 120ms;
+  --dur-quick: 220ms;
+  --dur-base: 420ms;
+  --dur-regime: 1400ms;
+  --dur-reveal: 900ms;
+  --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-transition: cubic-bezier(0.76, 0, 0.24, 1);
+
+  --void: #05070a;
+  --ice: #7fd4ff;
+  --amber: #ffb454;
+  --bone: #e8e6df;
+  --ember: #ff5c3a;
+  --violet: #9b7bff;
+
+  --rule: rgba(232, 230, 223, 0.12);
+  --font-ui: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-math: 'STIX Two Text', 'Iowan Old Style', Georgia, serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--void);
+  color: var(--bone);
+  font-family: var(--font-ui);
+  overflow: hidden;
+}
+
+#stage {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+
+#hud,
+#controls,
+#math {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+#controls {
+  pointer-events: none;
+}
+
+.fallback {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  padding: 4rem;
+  max-width: 60ch;
+  margin: auto;
+  line-height: 1.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
