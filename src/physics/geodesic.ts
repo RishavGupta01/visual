@@ -1,6 +1,9 @@
 /**
  * Exact Schwarzschild null geodesics.
  *
+ * Radial free fall lives in schwarzschild.ts and is re-exported from here, so the
+ * geodesics module reads as one unit without duplicating the integral.
+ *
  * Spherical symmetry keeps a geodesic in the plane containing the origin and its initial
  * direction, so a single ODE in phi is exact rather than an approximation. The Binet form
  * of the orbit equation is
@@ -25,6 +28,8 @@
  *   2. dt/dphi = r^2 / (b (1 - 2Mu)) is NOT constant. Only E and L are conserved. Treating
  *      dt/dphi as constant produces a plausible-looking but wrong redshift.
  */
+
+import { freeFallProperTime } from './schwarzschild';
 
 export interface NullGeodesicOptions {
   /** Impact parameter b = L/E, in metres. */
@@ -107,7 +112,6 @@ export function nullGeodesic(opts: NullGeodesicOptions): NullGeodesicResult {
   let captured = false;
   let escaped = false;
 
-  let prevR = r0;
   let prevU = 1 / r0;
   let prevPhi = 0;
   let prevT = 0;
