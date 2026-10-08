@@ -9,7 +9,7 @@ import { WORMHOLE_BODY } from './wormhole';
  * the regimes share the kernel, the camera, the tone curve and the transition path, and
  * differ only in the body each dispatches to.
  */
-export const UBER_FRAG = /* glsl */ `#version 300 es
+export const UBER_FRAG = /* glsl */ `
 precision highp float;
 
 in vec2 vUv;

@@ -1,8 +1,6 @@
-import { GEODESIC_RAYMARCH } from './common';
-
+// GEODESIC_RAYMARCH is not interpolated here: uber.ts already emits it once inside
+// GRAVITY_BODY, and GLSL rejects duplicate struct and function definitions.
 export const DILATION_BODY = /* glsl */ `
-${GEODESIC_RAYMARCH}
-
 /** dtau/dt for a static clock at r. */
 float staticRate(float r) { return sqrt(1.0 - 2.0 * uMass / r); }
 
@@ -40,7 +38,9 @@ vec3 renderDilation(vec2 ndc) {
   // one engine rather than two.
   Geodesic hit = traceSchwarzschild(ro, rd, uMass, rMax, dPhi, 2200);
 
-  vec3 colour = hit.captured ? vec3(0.004, 0.006, 0.011) : starfield(hit.direction) * 0.85;
+  vec3 colour = hit.captured
+    ? vec3(0.004, 0.006, 0.011)
+    : nebula(hit.direction) + starfield(hit.direction) * 1.1;
 
   if (uRadius > 2.05 * uMass) {
     // The orbiting clock's trail, amber: this is the one that runs slow.

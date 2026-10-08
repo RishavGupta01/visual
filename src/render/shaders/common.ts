@@ -52,27 +52,87 @@ vec3 srgbEncode(vec3 c) {
  * field has no resolution, no tiling, and every ray samples it independently. That
  * matters here because the direction a ray arrives from IS the thing being measured.
  */
+/**
+ * Blackbody-ish colour for a star, from cool red dwarf to hot blue giant.
+ * t runs 0 (cool) to 1 (hot).
+ */
+vec3 starColour(float t) {
+  vec3 red   = vec3(1.00, 0.60, 0.36);
+  vec3 amber = vec3(1.00, 0.83, 0.64);
+  vec3 white = vec3(1.00, 0.98, 0.95);
+  vec3 blue  = vec3(0.70, 0.81, 1.00);
+  vec3 c = mix(red, amber, smoothstep(0.0, 0.38, t));
+  c = mix(c, white, smoothstep(0.38, 0.66, t));
+  c = mix(c, blue, smoothstep(0.66, 1.0, t));
+  return c;
+}
+
+/**
+ * Directional star field.
+ *
+ * Two things mattered for legibility. First, every star centre is kept strictly inside its
+ * own cell: placing it at up to cell + 1.85 put some stars outside the 3x3x3 neighbourhood
+ * being sampled, so they were clipped by the cell boundary and rendered as hard squares.
+ * Second, each star is a tight core plus a wide faint halo rather than a single Gaussian,
+ * which is what makes bright stars read as light sources instead of as dots.
+ *
+ * No twinkle: there is no atmosphere out here to scintillate starlight, and adding some
+ * would be an invention the rest of the project is trying not to make.
+ */
 vec3 starfield(vec3 dir) {
   vec3 acc = vec3(0.0);
-  vec3 p = dir * 220.0;
+  vec3 p = dir * 160.0;
   vec3 cell = floor(p);
   for (int dx = -1; dx <= 1; dx++) {
     for (int dy = -1; dy <= 1; dy++) {
       for (int dz = -1; dz <= 1; dz++) {
         vec3 c = cell + vec3(float(dx), float(dy), float(dz));
         vec3 h = vec3(hash13(c), hash13(c + 17.3), hash13(c + 41.7));
-        if (h.z > 0.972) {
-          vec3 centre = c + h * 0.9 + 0.05;
+        if (h.z > 0.90) {
+          // Confined to [0.15, 0.85] of the cell, so it is never clipped by sampling.
+          vec3 centre = c + 0.15 + h * 0.7;
           float d = length(p - centre);
-          float mag = pow(fract(h.x * 91.7), 6.0);
-          float tint = hash13(c + 3.1);
-          vec3 colour = mix(vec3(0.62, 0.78, 1.0), vec3(1.0, 0.86, 0.68), tint);
-          acc += colour * exp(-d * d * 26.0) * mag;
+
+          // Magnitude distribution skewed hard towards faint, as a real sky is: many dim
+          // stars, very few bright ones.
+          float mag = 0.06 + 0.34 * pow(fract(h.x * 91.7), 4.0);
+          if (h.x > 0.988) mag *= 7.0;
+
+          float core = exp(-d * d * 130.0);
+          float halo = exp(-d * d * 11.0);
+          acc += starColour(hash13(c + 3.1)) * (core * 1.7 + halo * 0.22) * mag;
         }
       }
     }
   }
   return acc;
+}
+
+/**
+ * A faint interstellar background, so the void reads as a sky rather than as a dead
+ * screen. Art direction, not physics: it is drawn behind the stars and never displaces
+ * the arrival directions the geodesics compute.
+ *
+ * Kept deliberately dim. An earlier version filled the mid-tones and lifted the black
+ * floor across the whole frame, which flattened every shot; deep space needs to stay
+ * genuinely black for the subject to read.
+ */
+vec3 nebula(vec3 dir) {
+  float band = exp(-pow(dir.y * 2.2, 2.0));
+
+  // Two scales: a broad mass plus finer structure, so the clouds have silhouette instead
+  // of reading as one smooth wash.
+  float broad = fbm(dir * 2.2 + vec3(11.0, 3.0, 7.0));
+  float fine = fbm(dir * 6.5 + vec3(4.0, 19.0, 2.0));
+  float density = broad * 0.72 + fine * 0.28;
+
+  // Dense cores run cold blue; the thinning edges pick up a warmer cast, which is what gives
+  // the clouds their colour separation.
+  vec3 core = vec3(0.012, 0.020, 0.042);
+  vec3 edge = vec3(0.042, 0.020, 0.030);
+  vec3 colour = mix(edge, core, smoothstep(0.35, 0.72, density));
+
+  return colour * band * pow(density, 2.1) * 1.15;
 }
 
 struct Ray { vec3 origin; vec3 dir; };
@@ -217,8 +277,9 @@ Geodesic traceSchwarzschild(vec3 ro, vec3 dir, float M, float rMax, float dPhi, 
   // The straight line that leaves at the same angle sweeps this much; the difference is
   // the deflection.
   float bFlat = r0 * sinPsi;
-  float flat = acos(clamp(bFlat / r0, -1.0, 1.0)) + acos(clamp(bFlat / rMax, -1.0, 1.0));
-  o.deflection = phi - flat;
+  float flatSweep = acos(clamp(bFlat / r0, -1.0, 1.0))
+                  + acos(clamp(bFlat / rMax, -1.0, 1.0));
+  o.deflection = phi - flatSweep;
 
   // Reconstruct the arriving ray from the orbit curve r(theta) = 1/u: the tangent is
   // dr/dtheta radially plus r angularly.
@@ -237,7 +298,7 @@ Geodesic traceSchwarzschild(vec3 ro, vec3 dir, float M, float rMax, float dPhi, 
  * of the formulas, so the values read back are genuinely the GPU's rather than the
  * TypeScript ones echoed back.
  */
-export const PROBE_FRAG = /* glsl */ `#version 300 es
+export const PROBE_FRAG = /* glsl */ `
 precision highp float;
 in vec2 vUv;
 out vec4 fragColor;
@@ -255,15 +316,23 @@ void main() {
   float alpha = sqrt(max(0.0, 1.0 - 2.0 * M / r));
 
   // Inflate a geodesic to the probe impact parameter and read off the deflection.
-  float r0 = 1e5 * M;
-  float b = max(uProbeB, 1e-6 * M);
-  float sinPsi = clamp(b / r0, 1e-9, 0.999999) * sqrt(max(1.0 - 2.0 * M / r0, 0.0));
+  // Deflection for a ray at impact parameter b = uProbeB, with M = 1 so the ratio
+  // deflection / M is the quantity the TypeScript side compares against.
+  float probeM = 1.0;
+  float b = max(uProbeB, 1e-3);
+  float r0 = 1e5 * probeM;
+  float sinPsi = clamp(b / r0, 1e-9, 0.999999) * sqrt(max(1.0 - 2.0 * probeM / r0, 0.0));
   float cosPsi = -sqrt(max(0.0, 1.0 - sinPsi * sinPsi));
 
   vec3 start = vec3(r0, 0.0, 0.0);
   vec3 dir = normalize(vec3(cosPsi, sinPsi, 0.0));
-  Geodesic hit = traceSchwarzschild(start, dir, M, r0 * 1e3, 1e-4, 400000);
+  Geodesic hit = traceSchwarzschild(start, dir, probeM, r0 * 1e3, 1e-4, 400000);
 
-  fragColor = vec4(alpha, hit.deflection / max(M, 1e-9), 0.0, 1.0);
+  // Encoded for an 8-bit target. The deflection is about 4e-3 in units of M, which would
+  // quantise to zero if sent raw, so channel 1 carries (ratio - 1) * 100 where ratio is
+  // deflection / (4M/b). That keeps the value mid-range and gives ~4e-5 resolution on the
+  // ratio. See parity.ts for the decode.
+  float ratio = hit.deflection / (4.0 / b);
+  fragColor = vec4(alpha, clamp((ratio - 1.0) * 100.0, 0.0, 1.0), 0.0, 1.0);
 }
 `;

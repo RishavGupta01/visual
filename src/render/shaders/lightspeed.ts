@@ -14,7 +14,7 @@ vec3 renderLightSpeed(vec2 ndc) {
   float scale = uScale;
 
   // No redshift and no bending: lapse is exactly 1 here.
-  vec3 colour = starfield(rd) * 0.9;
+  vec3 colour = nebula(rd) + starfield(rd) * 1.15;
 
   // A reference grid at rest in the lab frame.
   vec2 cell = abs(fract(ro.yz / (scale * 0.06)) - 0.5);

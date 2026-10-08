@@ -74,6 +74,18 @@ body {
 
 /* ---------------------------------------------------------------- header */
 
+#hud::before {
+  /* A scrim behind the whole HUD. Readouts sit over a starfield that can be bright
+     anywhere, and bone-on-white made them unreadable over the accretion disk. */
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to bottom, rgba(5, 7, 10, 0.55), transparent 22%),
+    linear-gradient(to top, rgba(5, 7, 10, 0.7), transparent 26%);
+}
+
 .hud-top {
   position: absolute;
   top: 24px;
@@ -104,6 +116,15 @@ body {
 }
 
 /* ---------------------------------------------------------------- readouts */
+
+#controls::before {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 180px;
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(5, 7, 10, 0.85), transparent);
+}
 
 .hud-readouts {
   position: absolute;
@@ -207,16 +228,33 @@ body {
 
 #controls > * {
   position: absolute;
-  left: 24px;
-  right: 24px;
   pointer-events: auto;
 }
 
-.transport {
-  top: auto;
-  bottom: 96px;
+/* Positioned individually below. These need ID-level specificity to beat the `#controls > *`
+   rule above, which would otherwise stretch every rail to both margins and stack them. */
+#controls .transport {
   left: 24px;
   right: auto;
+}
+
+#controls .scrubber {
+  left: 24px;
+  right: 24px;
+}
+
+#controls .param-rail {
+  left: 24px;
+  right: 24px;
+}
+
+#controls .utility-rail {
+  left: auto;
+  right: 24px;
+}
+
+.transport {
+  bottom: 96px;
   display: flex;
   gap: 1px;
 }
@@ -367,10 +405,10 @@ input[type='range']::-moz-range-thumb {
   color: var(--bone);
 }
 
+/* Sits on the same row as the regime tabs, at the far right. Sharing the row keeps the
+   bottom of the screen to three bands and stops it colliding with the scrubber. */
 .utility-rail {
-  bottom: 56px;
-  right: 24px;
-  left: auto;
+  bottom: 96px;
   display: flex;
   gap: 1px;
 }

@@ -1,6 +1,6 @@
 import { GlRenderer, QUAD_VERT } from './render/renderer';
 import { UBER_FRAG } from './render/shaders/uber';
-import { createStore, type RegimeIndex } from './core/store';
+import { createStore, type AppState, type RegimeIndex } from './core/store';
 import { createTimeline } from './core/timeline';
 import { createTransition, accentFor } from './core/transitions';
 import { createRig } from './camera/rig';
@@ -51,7 +51,10 @@ function boot(): void {
   }
   renderer.reducedMotion = reducedMotion;
 
-  const rig = createRig({ mass: store.get().massMetres });
+  // Drag offsets live here rather than in a rig instance, because the rig is rebuilt per
+  // frame with a per-regime scale and its own internal offset would be discarded.
+  const view = { yaw: 0, pitch: 0 };
+
   const transition = createTransition({ store, reducedMotion });
 
   const hud = mountHud(hudHost);
@@ -76,7 +79,8 @@ function boot(): void {
       transition.start(from, next as RegimeIndex);
     },
     onResetCamera() {
-      rig.reset();
+      view.yaw = 0;
+      view.pitch = 0;
       timeline.scrubTo(0);
       if (!reducedMotion) timeline.play();
     },
@@ -86,11 +90,16 @@ function boot(): void {
     },
   });
 
-  store.subscribe((state) => {
+  // Paint the shell once at boot, then on every change. A subscription alone never fires
+  // for the initial state, so without this the HUD, math layer and controls all sit empty
+  // until the viewer happens to touch something.
+  const refreshShell = (state: Readonly<AppState>): void => {
     hud.update(state, timeline.position);
     math.update(state);
     controls.update(state);
-  });
+  };
+  refreshShell(store.get());
+  store.subscribe(refreshShell);
 
   // Scrubbing takes over from autoplay immediately, and a drag resumes it after a pause.
   window.addEventListener(
@@ -114,7 +123,8 @@ function boot(): void {
   });
   canvas.addEventListener('pointermove', (event) => {
     if (!pointerDown) return;
-    rig.drag((event.clientX - lastX) * 0.004, (event.clientY - lastY) * 0.004);
+    view.yaw += (event.clientX - lastX) * 0.004;
+      view.pitch += (event.clientY - lastY) * 0.004;
     lastX = event.clientX;
     lastY = event.clientY;
   });
@@ -129,19 +139,47 @@ function boot(): void {
   let probe: ReturnType<typeof createProbe> | null = null;
 
   let last = performance.now() / 1000;
+  let frameCount = 0;
 
+  let lastElapsed = Number.NaN;
   const frame = (nowMs: number): void => {
     const time = nowMs / 1000;
-    const delta = Math.min(0.1, time - last);
+    const rawDelta = time - last;
     last = time;
+    const delta = Math.min(0.1, rawDelta);
+    frameCount++;
 
-    transition.update(delta);
-    timeline.advance(delta);
+    // The transition runs on wall-clock time, not the clamped delta. The clamp exists so a
+    // restored background tab cannot jump the *playhead*, but applying it to a 1400 ms
+    // transition means a slow device stretches the transition to several seconds — the
+    // regime change visibly lags behind the keypress. The tab-restore case is already
+    // handled by resetting `last` in the visibilitychange handler.
+    transition.update(Math.min(0.5, rawDelta));
+
+    // The timeline is a loop, not a clock: clamping keeps playback smooth and monotonic
+    // rather than skipping ahead after a stall.
+    timeline.advance(Math.min(0.1, rawDelta));
 
     const state = store.get();
     const { width, height } = renderer.drawSize;
-    const shot = rig.sample(timeline.position01);
     const shaderTime = reducedMotion ? 12 : time;
+
+    // The camera distance is per-regime. Regimes A and B frame a black hole, so they scale
+    // with its Schwarzschild radius; regime D frames a wormhole throat, which has nothing to
+    // do with the black hole's mass. Using the black hole distance for the wormhole put the
+    // camera seven million throat-radii away, where a sphere-tracing loop can never reach the
+    // surface and the frame comes back empty.
+    // Framing is a fixed set of angles rather than an arbitrary distance. The shadow disc has
+  // radius b_crit/2 = 2.598 M, the photon ring sits at 3 sqrt(3) M = 5.196 M, and the disk
+  // starts at the ISCO = 6 M. At 20 M with a 0.6 rad lens the shadow fills about 45% of the
+  // half-frame and the disk's inner limb falls inside the lower frame, which is the
+  // composition the rig's low elevation assumes.
+    const regimeScale =
+      state.regime === 3 ? state.throatMetres * 4 : state.massMetres * 20;
+
+    const rigForRegime = createRig({ mass: regimeScale, distance: 1 });
+    rigForRegime.drag(view.yaw, view.pitch);
+    const shot = rigForRegime.sample(timeline.position01);
     const sceneScale = Math.max(Math.abs(shot.position[0]), Math.abs(shot.position[2]));
 
     renderer.set('uAspect', width / Math.max(1, height));
@@ -161,11 +199,20 @@ function boot(): void {
 
     renderer.render({ time: shaderTime, delta });
 
+    // The timeline advances every frame while the store does not, so a subscription alone
+    // would freeze the elapsed clocks and the scrubber readout. Refresh the two elapsed-time
+    // consumers only when the value actually changes, which keeps the DOM writes bounded.
+    if (timeline.position !== lastElapsed) {
+      lastElapsed = timeline.position;
+      hud.update(state, lastElapsed);
+      controls.update(state);
+    }
+
     diagramHost.hidden = state.regime !== 2;
     if (!diagramHost.hidden) diagram.draw(timeline.position, state.boostBeta);
 
     if (state.parityOpen) {
-      probe ??= createProbe(PROBE_FRAG, QUAD_VERT);
+      probe ??= createProbe(PROBE_FRAG, QUAD_VERT, { byteTarget: true });
       parity.update(state, probe, time, delta);
     }
 
@@ -176,6 +223,23 @@ function boot(): void {
   window.addEventListener('resize', () => {
     renderer.resize();
     diagram.resize();
+  });
+
+  // Exposed so the verification harness can assert on real renderer state (frame count,
+  // uniform values, timings) instead of inferring it from pixels. Read-only by convention;
+  // nothing in the app reads it back.
+  Object.assign(window, {
+    __spacetime: {
+      renderer,
+      store,
+      timeline,
+      get probe() {
+        return probe;
+      },
+      frameCount: () => frameCount,
+      lastCost: () => renderer.lastCost,
+      reducedSteps: () => renderer.reducedSteps,
+    },
   });
 
   document.addEventListener('visibilitychange', () => {

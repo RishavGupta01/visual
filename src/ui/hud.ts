@@ -51,7 +51,9 @@ export function computeReadouts(state: AppState, elapsed: number): Readout[] {
           value: staticRate > 0 ? `${sig(1 / ratio, 4)} hours there` : '∞',
           emphasis: true,
         });
-        const fall = freeFallProperTime(r, 2 * M, M);
+        // freeFallProperTime integrates in geometric units, so its result is a length
+        // c*tau. Dividing by c is what turns it into the seconds the label promises.
+        const fall = freeFallProperTime(r, 2 * M, M) / C_LIGHT;
         rows.push({
           key: 'freefall',
           label: 'free fall τ to horizon',

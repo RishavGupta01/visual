@@ -55,7 +55,7 @@ vec3 renderWormhole(vec2 ndc) {
   vec3 ro = ray.origin;
   vec3 rd = ray.dir;
 
-  vec3 colour = starfield(rd) * 0.8;
+  vec3 colour = nebula(rd) + starfield(rd) * 1.05;
 
   float b = max(uThroat, 1.0);
   float t = 0.0;

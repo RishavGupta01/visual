@@ -67,13 +67,18 @@ export function createRig(opts: RigOptions = {}): Rig {
   const distance = opts.distance ?? 26;
   let offset: [number, number] = [0, 0];
 
+  // Elevation is a compromise, and both extremes are wrong. Looking steeply down at the
+  // equatorial plane (tens of degrees) hides the disk entirely: from high above, rays cross
+  // the plane at radii far outside the frame, so nothing is in shot at all. Looking almost
+  // edge-on instead collapses it into a bar across the frame. Roughly 15-25 degrees is what
+  // puts the disk's inner limb in the lower frame while still reading as an ellipse.
   const shape: [number, number, number][] = [
-    [1, 0.6, 0],
-    [0.2, 3.4, 0.7],
-    [-0.8, 1.1, 0.6],
-    [-0.3, 0.2, -0.85],
-    [0.55, 2.2, -0.5],
-    [1, 0.6, 0],
+    [1, 0.28, 0],
+    [0.2, 0.9, 0.7],
+    [-0.8, 0.3, 0.6],
+    [-0.3, 0.22, -0.85],
+    [0.55, 0.55, -0.5],
+    [1, 0.28, 0],
   ];
   const path: Vec3[] = shape.map((p) => [p[0] * mass * distance, p[1] * mass, p[2] * mass * distance]);
 
