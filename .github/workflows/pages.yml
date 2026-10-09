@@ -27,6 +27,12 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # Must be uploaded here, in the build job. The deploy job runs on a fresh runner and
+      # has no checkout, so it never sees dist/ — upload-pages-artifact there fails with
+      # "tar: dist: Cannot open".
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
 
   deploy:
     needs: build
@@ -36,8 +42,5 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
       - id: deployment
         uses: actions/deploy-pages@v4
